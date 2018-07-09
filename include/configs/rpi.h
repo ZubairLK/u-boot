@@ -91,6 +91,10 @@
 #define CONFIG_SYS_LOAD_ADDR		0x1000000
 #define CONFIG_PREBOOT			"usb start"
 
+/* Bootcount */
+#define CONFIG_BOOTCOUNT_LIMIT
+#define CONFIG_BOOTCOUNT_ENV
+
 /* Shell */
 #define CONFIG_CMDLINE_EDITING
 
@@ -156,6 +160,9 @@
 
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	"dhcpuboot=usb start; dhcp u-boot.uimg; bootm\0" \
+	"altbootcmd=env set boot_scripts altboot.scr.uimg altboot.scr; run distro_bootcmd;\0"\
+	"bootlimit=1\0"\
+	"upgrade_available=1\0"\
 	ENV_DEVICE_SETTINGS \
 	ENV_MEM_LAYOUT_SETTINGS \
 	BOOTENV
