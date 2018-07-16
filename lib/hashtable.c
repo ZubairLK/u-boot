@@ -15,6 +15,7 @@
 
 #include <errno.h>
 #include <malloc.h>
+#include <environment.h>
 
 #ifdef USE_HOSTCC		/* HOST build */
 # include <string.h>
@@ -780,8 +781,17 @@ int himport_r(struct hsearch_data *htab,
 {
 	char *data, *sp, *dp, *name, *value;
 	char *localvars[nvars];
-	int i;
 
+	/*
+	 * If nvars == 0 and vars == '\n', we store list of variables
+	 * being imported from resinOS_uEnv.txt into an environment
+	 * variable: resin_imported_env_list
+	 * This is later used during env_export and only those variable
+	 * are then saved back into resinOS_uEnv.txt
+	 */
+	int i;
+	char * resin_imported_env_list;
+	resin_imported_env_list = calloc(sizeof(char),CONFIG_ENV_SIZE);
 	/* Test for correct arguments.  */
 	if (htab == NULL) {
 		__set_errno(EINVAL);
@@ -921,6 +931,9 @@ int himport_r(struct hsearch_data *htab,
 		e.key = name;
 		e.data = value;
 
+		if (nvars == 0 && vars == '\n')
+			sprintf(resin_imported_env_list , "%s %s",resin_imported_env_list, name);
+
 		hsearch_r(e, ENTER, &rv, htab, flag);
 		if (rv == NULL)
 			printf("himport_r: can't insert \"%s=%s\" into hash table\n",
@@ -933,6 +946,9 @@ int himport_r(struct hsearch_data *htab,
 						/* without '\0' termination */
 	debug("INSERT: free(data = %p)\n", data);
 	free(data);
+
+	if (nvars == 0 && vars == '\n')
+		env_set("resin_imported_env_list", resin_imported_env_list);
 
 	/* process variables which were not considered */
 	for (i = 0; i < nvars; i++) {

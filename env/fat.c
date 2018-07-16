@@ -40,12 +40,13 @@ static int env_fat_save(void)
 	struct blk_desc *dev_desc = NULL;
 	disk_partition_t info;
 	int dev, part;
+	int len;
 	int err;
 	loff_t size;
 
-	err = env_export(&env_new);
-	if (err)
-		return err;
+	len = env_export(&env_new);
+	if (len < 0)
+		return len;
 
 	part = blk_get_device_part_str(CONFIG_ENV_FAT_INTERFACE,
 					CONFIG_ENV_FAT_DEVICE_AND_PART,
@@ -60,7 +61,11 @@ static int env_fat_save(void)
 		return 1;
 	}
 
-	err = file_fat_write(CONFIG_ENV_FAT_FILE, (void *)&env_new, 0, sizeof(env_t),
+	/*
+	 * We don't have crc and we store in txt format, save env.data only
+	 * and not the complete env structure
+	 */
+	err = file_fat_write(CONFIG_ENV_FAT_FILE, (void *)&env_new.data, 0, len,
 			     &size);
 	if (err == -1) {
 		printf("\n** Unable to write \"%s\" from %s%d:%d **\n",
@@ -81,6 +86,10 @@ static int env_fat_load(void)
 	disk_partition_t info;
 	int dev, part;
 	int err;
+	int i;
+
+	for (i = 0; i < CONFIG_ENV_SIZE; i++)
+		buf[i] = 0;
 
 	part = blk_get_device_part_str(CONFIG_ENV_FAT_INTERFACE,
 					CONFIG_ENV_FAT_DEVICE_AND_PART,

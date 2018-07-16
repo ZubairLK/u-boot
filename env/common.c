@@ -111,6 +111,11 @@ int env_import(const char *buf, int check)
 {
 	env_t *ep = (env_t *)buf;
 
+	/* Ignore CRC check as we don't have the CRC of resinOS_uEnv.txt
+	 * file
+	 */
+	check = 0;
+
 	if (check) {
 		uint32_t crc;
 
@@ -122,8 +127,14 @@ int env_import(const char *buf, int check)
 		}
 	}
 
-	if (himport_r(&env_htab, (char *)ep->data, ENV_SIZE, '\0', 0, 0,
-			0, NULL)) {
+	/* Use \n as separator. We want to use resinOS_uEnv.txt
+	 * and the contents of resinOS_uEnv.txt will augement default
+	 * environment. The last arg '\n' is a flag that is checked
+	 * in himport_r for a hack to store the list of names that
+	 * is imported in resin_imported_env_list.
+	 */
+	set_default_env("Import default built-in env");
+	if (himport_r(&env_htab, (char *)ep, ENV_SIZE, '\n', H_NOCLEAR | H_INTERACTIVE | H_FORCE, 0, 0, '\n')) {
 		gd->flags |= GD_FLG_ENV_READY;
 		return 1;
 	}
@@ -187,21 +198,55 @@ int env_export(env_t *env_out)
 {
 	char *res;
 	ssize_t	len;
+	size_t  size = 0;
+        int argc = 0;
+	int i = 0;
+        char * argv[50];
+	char * resin_imported_env_list;
+	char buf[100];
 
-	res = (char *)env_out->data;
-	len = hexport_r(&env_htab, '\0', 0, &res, ENV_SIZE, 0, NULL);
-	if (len < 0) {
-		pr_err("Cannot export environment: errno = %d\n", errno);
-		return 1;
+	/*
+	 * During env_import, we hacked himport_r to save the list of
+	 * variables that were imported from resinOS_uEnv.txt into
+	 * an environment variable : resin_imported_env_list
+	 * Load that variable, and then only store those back into
+	 * resinOS_uEnv.txt
+	 */
+
+        resin_imported_env_list = env_get("resin_imported_env_list");
+	strcpy(buf,resin_imported_env_list);	
+
+	for (i = 0; resin_imported_env_list[i] != '\0';i++) {
+		if (resin_imported_env_list[i] == ' ')
+			argc++;
 	}
 
-	env_out->crc = crc32(0, env_out->data, ENV_SIZE);
+	char *token = strtok(buf, " ");
+	i = 0;
+	while (token != NULL)
+	{	
+		argv[i] = calloc(sizeof(char),100);
+		strcpy(argv[i], token);
+		token = strtok(NULL, " ");
+		i++;
+	}
+	argv[i] = NULL;
+	size = 0;
+
+	res = (char *)env_out->data;
+	len = hexport_r(&env_htab, '\n', H_MATCH_KEY | H_MATCH_IDENT , &res, size, argc ,argv);
+	if (len < 0) {
+		pr_err("Cannot export environment: errno = %d\n", errno);
+		return -1;
+	}
+	else
+		pr_err("exported %d or %zX\n", len, (size_t)len);
 
 #ifdef CONFIG_SYS_REDUNDAND_ENVIRONMENT
 	env_out->flags = ++env_flags; /* increase the serial */
 #endif
 
-	return 0;
+	return len;
 }
 
 void env_relocate(void)
